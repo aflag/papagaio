@@ -1,0 +1,6 @@
+*.img
+atualiza_kernel.sh
+*.o
+papagaio
+*.swp
+*.swo
