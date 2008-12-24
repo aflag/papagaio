@@ -63,20 +63,8 @@ static void sobe_linha()
 	--proxima_linha;
 }
 
-void inicia_console(void)
-{
-	int i;
-
-	for (i = 0; i < TAMANHO; ++i)
-		if (!(i%2))
-			memoria_vid[i] = 0x0;
-		else
-			memoria_vid[i] = COR;
-}
-
 int imprime(const char *s)
 {
-	unsigned int i;
 	char c;
 
 	while (c = *s) {
@@ -89,6 +77,10 @@ int imprime(const char *s)
 			sobe_linha();
 
 		if (c == '\n') {
+			while (proxima_coluna < NUM_COLUNAS) {
+				escreve_pos(proxima_linha, proxima_coluna, 0x0);
+				++proxima_coluna;
+			}
 			proxima_coluna = 0;
 			++proxima_linha;
 		} else {
