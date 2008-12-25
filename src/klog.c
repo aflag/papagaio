@@ -13,16 +13,25 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <stdarg.h>
+
 #include <console.h>
 #include <erros.h>
 #include <klog.h>
 
-int klog(int metodo, const char *s)
+int klog(int metodo, const char *s, ...)
 {
+	va_list ap;
+
+	va_start(ap, s);
+
 	switch (metodo) {
 		case CONSOLE:
-			return imprime(s);
+			vimprime(s, ap);
+			return 0;
 		default:
 			return E_NDEF;
 	}
+
+	va_end(ap);
 }

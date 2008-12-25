@@ -13,6 +13,8 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
  
+#include <stdarg.h>
+
 #include <console.h>
 
 #define NUM_COLUNAS 80
@@ -34,18 +36,29 @@ static char *memoria_vid = (char*)0xb8000;
 
 #define COR 0x02
 
-static void escreve_pos(int linha, int coluna, char c)
+static __inline__ int valor_absoluto(int linha, int coluna)
 {
-	int pos = 2*linha*NUM_COLUNAS + 2*coluna;
+	return linha*NUM_COLUNAS + coluna;
+}
 
-	memoria_vid[pos] = c;
-	++pos;
+static __inline__ void escreve(int pos, char c)
+{
+	pos *= 2;
+	memoria_vid[pos++] = c;
 	memoria_vid[pos] = COR;
 }
 
-static char le_pos(int linha, int coluna)
+static __inline__ void escreve_lc(int linha, int coluna, char c)
 {
-	return memoria_vid[2*linha*NUM_COLUNAS + 2*coluna];
+	int pos = 2*valor_absoluto(linha, coluna);
+
+	memoria_vid[pos++] = c;
+	memoria_vid[pos] = COR;
+}
+
+static __inline__ char le_lc(int linha, int coluna)
+{
+	return memoria_vid[2*valor_absoluto(linha, coluna)];
 }
 
 static void sobe_linha()
@@ -55,19 +68,143 @@ static void sobe_linha()
 
 	for (i = 1; i < NUM_LINHAS; ++i)
 		for (j = 0; j < NUM_COLUNAS; ++j) {
-			c = le_pos(i, j);
-			escreve_pos(i-1, j, c);
+			c = le_lc(i, j);
+			escreve_lc(i-1, j, c);
 		}
+
+	/* limpa a última linha */
+	for (j = 0; j < NUM_COLUNAS; ++j)
+		escreve_lc(NUM_LINHAS-1, j, 0x0);
 
 	proxima_coluna = 0;
 	--proxima_linha;
 }
 
-int imprime(const char *s)
+static void imprime_int(int x)
+{
+	int len = 1, i, negativo = 0;
+	int q;
+
+	if (x < 0) {
+		negativo = 1;
+		x = -x;
+		++len;
+	}
+
+	q = x;
+
+	while (q > 9) {
+		++len;
+		q /= 10;
+	}
+
+	i = valor_absoluto(proxima_linha, proxima_coluna) + len-1;
+	proxima_coluna += len;
+	if (proxima_coluna >= NUM_COLUNAS) {
+		proxima_coluna -= NUM_COLUNAS;
+		++proxima_linha;
+		if (proxima_linha >= NUM_LINHAS)
+			sobe_linha();
+	}
+
+	do {
+		escreve(i--, '0' + (x % 10));
+		x /= 10;
+	} while (x);
+
+	if (negativo)
+		escreve(i, '-');
+}
+
+static void imprime_uint(unsigned int x)
+{
+	int len = 1, i;
+	unsigned int q;
+
+	q = x;
+
+	while (q > 9) {
+		++len;
+		q /= 10;
+	}
+
+	i = valor_absoluto(proxima_linha, proxima_coluna) + len-1;
+	proxima_coluna += len;
+	if (proxima_coluna >= NUM_COLUNAS) {
+		proxima_coluna -= NUM_COLUNAS;
+		++proxima_linha;
+		if (proxima_linha >= NUM_LINHAS)
+			sobe_linha();
+	}
+
+	do {
+		escreve(i--, '0' + (x % 10));
+		x /= 10;
+	} while (x);
+}
+
+static __inline__ char tohex(unsigned int x)
+{
+	if (x < 10)
+		return '0' + x;
+	else
+		return 'a' + (x-10);
+}
+
+static void imprime_xuint(unsigned int x)
+{
+	int len = 3, i;
+	unsigned int q;
+
+	q = x;
+
+	while (q > 15) {
+		++len;
+		q /= 16;
+	}
+
+	i = valor_absoluto(proxima_linha, proxima_coluna) + len-1;
+	proxima_coluna += len;
+	if (proxima_coluna >= NUM_COLUNAS) {
+		proxima_coluna -= NUM_COLUNAS;
+		++proxima_linha;
+		if (proxima_linha >= NUM_LINHAS)
+			sobe_linha();
+	}
+
+	do {
+		escreve(i--, tohex(x % 16));
+		x /= 16;
+	} while (x);
+
+	escreve(i--, 'x');
+	escreve(i, '0');
+}
+
+static __inline__ void imprime_formato(char c, va_list ap)
+{
+	switch (c) {
+		case 'd' :
+			imprime_int(va_arg(ap, int));
+			break;
+		case 'u' :
+			imprime_uint(va_arg(ap, unsigned int));
+			break;
+		case 'x' :
+			imprime_xuint(va_arg(ap, unsigned int));
+			break;
+		default:
+			escreve_lc(proxima_linha, proxima_coluna, c);
+			++proxima_coluna;
+			break;
+	}
+}
+
+void vimprime(const char *fmt, va_list ap)
 {
 	char c;
 
-	while (c = *s) {
+	while (c = *fmt) {
 		if (proxima_coluna >= NUM_COLUNAS) {
 			proxima_coluna = 0;
 			++proxima_linha;
@@ -76,18 +213,38 @@ int imprime(const char *s)
 		if (proxima_linha >= NUM_LINHAS)
 			sobe_linha();
 
-		if (c == '\n') {
-			while (proxima_coluna < NUM_COLUNAS) {
-				escreve_pos(proxima_linha, proxima_coluna, 0x0);
+		switch (c) {
+			case '\n' :
+				while (proxima_coluna < NUM_COLUNAS) {
+					escreve_lc(proxima_linha,
+					           proxima_coluna,
+						   0);
+					++proxima_coluna;
+				}
+				proxima_coluna = 0;
+				++proxima_linha;
+				break;
+			case '%' :
+				if (*(fmt+1)) {
+					++fmt;
+					imprime_formato(*fmt, ap);
+				}
+				break;
+			default :
+				escreve_lc(proxima_linha, proxima_coluna, c);
 				++proxima_coluna;
-			}
-			proxima_coluna = 0;
-			++proxima_linha;
-		} else {
-			escreve_pos(proxima_linha, proxima_coluna, c);
-			++proxima_coluna;
+				break;
 		}
 
-		++s;
+		++fmt;
 	}
+}
+
+void imprime(const char *fmt, ...)
+{
+	va_list ap;
+
+	va_start(ap, fmt);
+	vimprime(fmt, ap);
+	va_end(ap);
 }
