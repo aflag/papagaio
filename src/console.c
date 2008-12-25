@@ -1,9 +1,9 @@
 /*  Copyright (c) 2008, 2009, Rafael Cunha de Almeida <almeidaraf@gmail.com>
- * 
+ *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
  * copyright notice and this permission notice appear in all copies.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
  * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
@@ -12,19 +12,13 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
- 
+
 #include <stdarg.h>
 
 #include <console.h>
 
 #define NUM_COLUNAS 80
 #define NUM_LINHAS 25
-
-/* O tamanho do buffer de video é 80 colunas por 25 linhas. Cada caractere pode
- * ter uma cor diferente e, por isso, existem 2 bytes associados a cada caracter
- * na tela.
- */
-#define TAMANHO (NUM_LINHAS*NUM_COLUNAS*2)
 
 static unsigned int proxima_linha = 0;
 static unsigned int proxima_coluna = 0;
@@ -36,11 +30,18 @@ static char *memoria_vid = (char*)0xb8000;
 
 #define COR 0x02
 
+/* Dado uma linha e uma coluna, retorna a posição do byte caso não houvessem os
+ * bytes de cor.
+ */
 static __inline__ int valor_absoluto(int linha, int coluna)
 {
 	return linha*NUM_COLUNAS + coluna;
 }
 
+/* Escreve numa posição da memória de video, sem considerar a diferença de
+ * linhas e colunas. Abstrai os bytes de cor, ie. pos = 0 -> 0, pos = 1 -> 2,
+ * ...
+ */
 static __inline__ void escreve(int pos, char c)
 {
 	pos *= 2;
@@ -48,6 +49,7 @@ static __inline__ void escreve(int pos, char c)
 	memoria_vid[pos] = COR;
 }
 
+/* Escreve na memória de video considerando linha e coluna. */
 static __inline__ void escreve_lc(int linha, int coluna, char c)
 {
 	int pos = 2*valor_absoluto(linha, coluna);
@@ -56,11 +58,22 @@ static __inline__ void escreve_lc(int linha, int coluna, char c)
 	memoria_vid[pos] = COR;
 }
 
+/* Lê da memória de video considerando linha e coluna. */
 static __inline__ char le_lc(int linha, int coluna)
 {
 	return memoria_vid[2*valor_absoluto(linha, coluna)];
 }
 
+/* limpa os caracteres da linha a partir da coluna */
+static __inline__ void limpa(int linha, int coluna)
+{
+	int i;
+
+	for (i = coluna; i < NUM_COLUNAS; ++i)
+		escreve_lc(linha, i, 0x0);
+}
+
+/* Faz a tela subir uma linha e, assim liberar uma linha de espaço */
 static void sobe_linha()
 {
 	unsigned int i, j;
@@ -72,14 +85,15 @@ static void sobe_linha()
 			escreve_lc(i-1, j, c);
 		}
 
-	/* limpa a última linha */
-	for (j = 0; j < NUM_COLUNAS; ++j)
-		escreve_lc(NUM_LINHAS-1, j, 0x0);
 
-	proxima_coluna = 0;
+	limpa(NUM_LINHAS-1, 0);
+
 	--proxima_linha;
 }
 
+/* As funcoes imprime_int, imprime_uint e imprime_xuint transformam os numeros
+ * em uma sequencia de char que sao impressos na memória de video.
+ */
 static void imprime_int(int x)
 {
 	int len = 1, i, negativo = 0;
@@ -98,7 +112,6 @@ static void imprime_int(int x)
 		q /= 10;
 	}
 
-	i = valor_absoluto(proxima_linha, proxima_coluna) + len-1;
 	proxima_coluna += len;
 	if (proxima_coluna >= NUM_COLUNAS) {
 		proxima_coluna -= NUM_COLUNAS;
@@ -106,6 +119,7 @@ static void imprime_int(int x)
 		if (proxima_linha >= NUM_LINHAS)
 			sobe_linha();
 	}
+	i = valor_absoluto(proxima_linha, proxima_coluna) - 1;
 
 	do {
 		escreve(i--, '0' + (x % 10));
@@ -128,7 +142,6 @@ static void imprime_uint(unsigned int x)
 		q /= 10;
 	}
 
-	i = valor_absoluto(proxima_linha, proxima_coluna) + len-1;
 	proxima_coluna += len;
 	if (proxima_coluna >= NUM_COLUNAS) {
 		proxima_coluna -= NUM_COLUNAS;
@@ -136,6 +149,7 @@ static void imprime_uint(unsigned int x)
 		if (proxima_linha >= NUM_LINHAS)
 			sobe_linha();
 	}
+	i = valor_absoluto(proxima_linha, proxima_coluna) - 1;
 
 	do {
 		escreve(i--, '0' + (x % 10));
@@ -163,7 +177,6 @@ static void imprime_xuint(unsigned int x)
 		q /= 16;
 	}
 
-	i = valor_absoluto(proxima_linha, proxima_coluna) + len-1;
 	proxima_coluna += len;
 	if (proxima_coluna >= NUM_COLUNAS) {
 		proxima_coluna -= NUM_COLUNAS;
@@ -171,6 +184,7 @@ static void imprime_xuint(unsigned int x)
 		if (proxima_linha >= NUM_LINHAS)
 			sobe_linha();
 	}
+	i = valor_absoluto(proxima_linha, proxima_coluna) - 1;
 
 	do {
 		escreve(i--, tohex(x % 16));
@@ -181,6 +195,9 @@ static void imprime_xuint(unsigned int x)
 	escreve(i, '0');
 }
 
+/* Usa a função de impressão certa de acordo com a letra após a %. Essa é uma
+ * maneira bem rústica de fazer um overload :-).
+ */
 static __inline__ void imprime_formato(char c, va_list ap)
 {
 	switch (c) {
@@ -200,27 +217,20 @@ static __inline__ void imprime_formato(char c, va_list ap)
 	}
 }
 
+/* Imprime a string passada por parâmetro na memória de video. */
 void vimprime(const char *fmt, va_list ap)
 {
 	char c;
 
-	while (c = *fmt) {
-		if (proxima_coluna >= NUM_COLUNAS) {
+	while ((c = *fmt)) {
+		if (proxima_linha >= NUM_LINHAS) {
 			proxima_coluna = 0;
-			++proxima_linha;
-		}
-
-		if (proxima_linha >= NUM_LINHAS)
 			sobe_linha();
+		}
 
 		switch (c) {
 			case '\n' :
-				while (proxima_coluna < NUM_COLUNAS) {
-					escreve_lc(proxima_linha,
-					           proxima_coluna,
-						   0);
-					++proxima_coluna;
-				}
+				limpa(proxima_linha, proxima_coluna);
 				proxima_coluna = 0;
 				++proxima_linha;
 				break;
@@ -231,6 +241,10 @@ void vimprime(const char *fmt, va_list ap)
 				}
 				break;
 			default :
+				if (proxima_coluna >= NUM_COLUNAS) {
+					proxima_coluna = 0;
+					++proxima_linha;
+				}
 				escreve_lc(proxima_linha, proxima_coluna, c);
 				++proxima_coluna;
 				break;

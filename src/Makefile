@@ -1,5 +1,5 @@
 OBJS = papagaio.o boot.o console.o string.o klog.o
-CFLAGS = -m32 -Iinclude/ -fno-builtin -nostdlib -static
+CFLAGS = -O2 -W -Wall -m32 -Iinclude/ -fno-builtin -nostdlib -static
 
 papagaio: $(OBJS)
 	ld -Tpapagaio.ld -melf_i386 $(OBJS) -opapagaio

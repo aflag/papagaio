@@ -5,12 +5,6 @@
 
 void vimprime(const char *s, va_list ap);
 
-void imprime(const char *s, ...);
-
-void inicia_console(void);
-
-enum erros {
-	E_TAMANHO = -20
-};
+void imprime(const char *s, ...) __attribute__ ((format (printf, 1, 2)));
 
 #endif

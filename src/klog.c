@@ -1,9 +1,9 @@
 /*  Copyright (c) 2008, 2009, Rafael Cunha de Almeida <almeidaraf@gmail.com>
- * 
+ *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
  * copyright notice and this permission notice appear in all copies.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
  * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
  * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
@@ -19,6 +19,12 @@
 #include <erros.h>
 #include <klog.h>
 
+/* Esta função serve para logar as atividades do kernel, debugar novos sistemas,
+ * etc. O primeiro parâmetro escolhe a forma que o log deve ser feito.
+ *
+ * Se a função for bem sucedida ela retorna 0. Caso contrário ela retorna um dos
+ * erros em erros.h.
+ */
 int klog(int metodo, const char *s, ...)
 {
 	va_list ap;
