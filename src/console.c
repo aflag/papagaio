@@ -198,17 +198,17 @@ static void imprime_xuint(unsigned int x)
 /* Usa a função de impressão certa de acordo com a letra após a %. Essa é uma
  * maneira bem rústica de fazer um overload :-).
  */
-static __inline__ void imprime_formato(char c, va_list ap)
+static __inline__ void imprime_formato(char c, va_list *ap)
 {
 	switch (c) {
 		case 'd' :
-			imprime_int(va_arg(ap, int));
+			imprime_int(va_arg(*ap, int));
 			break;
 		case 'u' :
-			imprime_uint(va_arg(ap, unsigned int));
+			imprime_uint(va_arg(*ap, unsigned int));
 			break;
 		case 'x' :
-			imprime_xuint(va_arg(ap, unsigned int));
+			imprime_xuint(va_arg(*ap, unsigned int));
 			break;
 		default:
 			escreve_lc(proxima_linha, proxima_coluna, c);
@@ -237,7 +237,7 @@ void vimprime(const char *fmt, va_list ap)
 			case '%' :
 				if (*(fmt+1)) {
 					++fmt;
-					imprime_formato(*fmt, ap);
+					imprime_formato(*fmt, &ap);
 				}
 				break;
 			default :
