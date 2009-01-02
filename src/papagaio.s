@@ -12,17 +12,25 @@
 ; ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 ; OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-[BITS 32]
-[GLOBAL inicio]
-[EXTERN kmain]
+[bits 32]
+
+[extern kmain]
+[global inicio]
 
 ; -*- COMUNICAÇÃO COM O BOOTLOADER -*-
-multiboot:
-	magic    dd  0x1BADB002
-	flags    dd  0x0
-	checksum dd  -(0x1BADB002)
+MB_MAGIC equ 0x1BADB002
+MB_ALIGNED_FLAG equ (1 << 0)
+MB_MEMINFO_FLAG equ (1 << 1)
+MB_FLAGS equ (MB_ALIGNED_FLAG | MB_MEMINFO_FLAG)
+
+	dd MB_MAGIC
+	dd MB_FLAGS
+	dd -(MB_MAGIC + MB_FLAGS)
 ; -*- FIM DA COMUNICAÇÃO COM BOOTLOADER -*-
 
 inicio:
+	push ebx
+
 	call kmain
+	hlt
 	jmp $

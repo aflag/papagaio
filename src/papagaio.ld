@@ -25,7 +25,7 @@ SECTIONS
 	.data :
 	{
 		*(.data)
-		*(.rodata)
+		*(.rodata*)
 		. = ALIGN(4096);
 	}
 

@@ -20,19 +20,21 @@
 #include <klog.h>
 
 /* Esta função serve para logar as atividades do kernel, debugar novos sistemas,
- * etc. O primeiro parâmetro escolhe a forma que o log deve ser feito.
+ * etc. O primeiro parâmetro escolhe a prioridade do log.
  *
  * Se a função for bem sucedida ela retorna 0. Caso contrário ela retorna um dos
  * erros em erros.h.
  */
-int klog(int metodo, const char *s, ...)
+int klog(int prioridade, const char *s, ...)
 {
 	va_list ap;
 
 	va_start(ap, s);
 
-	switch (metodo) {
-		case CONSOLE:
+	switch (prioridade) {
+		case IMPORTANTE:
+		case AVISO:
+		case DEBUG:
 			vimprime(s, ap);
 			return 0;
 		default:

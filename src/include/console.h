@@ -1,5 +1,6 @@
-#ifndef _CONSOLE__H
-#define _CONSOLE__H
+#ifndef __CONSOLE_H
+#define __CONSOLE_H
+/* public domain */
 
 #include <stdarg.h>
 

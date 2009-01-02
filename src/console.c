@@ -207,6 +207,7 @@ static __inline__ void imprime_formato(char c, va_list *ap)
 		case 'u' :
 			imprime_uint(va_arg(*ap, unsigned int));
 			break;
+		case 'p' :
 		case 'x' :
 			imprime_xuint(va_arg(*ap, unsigned int));
 			break;

@@ -4,3 +4,7 @@ atualiza_kernel.sh
 papagaio
 *.swp
 *.swo
+*.aux
+*.log
+*.pdf
+*.dvi

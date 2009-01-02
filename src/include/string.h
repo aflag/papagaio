@@ -1,5 +1,5 @@
-#ifndef _STRING__H
-#define _STRING__H
+#ifndef __STRING_H
+#define __STRING_H
 
 unsigned int strlen(const char *s);
 

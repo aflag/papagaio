@@ -13,14 +13,26 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include <console.h>
+#include <tipos.h>
+#include <bit.h>
+#include <multiboot.h>
 #include <klog.h>
 
-/* Função inicial do kernel. É aqui que tudo começa :-). */
-void kmain(void)
-{
-	int i=0;
+extern char final_kernel;
 
-	for (; i< 33; ++i)
-		klog(CONSOLE, "%d %u %x\n", i, i, i);
+/* Função inicial do kernel. É aqui que tudo começa :-). */
+void kmain(struct multiboot_info *mbi)
+{
+	u32 flags = mbi->flags;
+
+	debug( "flags: %x\n", flags);
+	if (is_set(flags, 6)) {
+		struct mmap_record *x = mbi->mmap;
+		u32 i;
+		u32 total = mbi->mmap_length / (sizeof (struct mmap_record));
+		for (i = 0; i < total; ++i) {
+			debug("type: %x, base: %x, length: %x\n",
+			      x[i].type, x[i].base_low, x[i].length_low);
+		}
+	}
 }
