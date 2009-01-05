@@ -45,5 +45,5 @@ SECTIONS
 		. = ALIGN(4096);
 	}
 
-	final_kernel = .;
+	final_estatico = .;
 }

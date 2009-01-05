@@ -32,8 +32,9 @@ int klog(int prioridade, const char *s, ...)
 	va_start(ap, s);
 
 	switch (prioridade) {
-		case IMPORTANTE:
-		case AVISO:
+		case ERRO:
+		case ALERTA:
+		case NOTA:
 		case DEBUG:
 			vimprime(s, ap);
 			return 0;

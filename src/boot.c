@@ -14,25 +14,17 @@
  */
 
 #include <tipos.h>
-#include <bit.h>
 #include <multiboot.h>
 #include <klog.h>
-
-extern char final_kernel;
+#include <vm.h>
 
 /* Função inicial do kernel. É aqui que tudo começa :-). */
 void kmain(struct multiboot_info *mbi)
 {
-	u32 flags = mbi->flags;
-
-	debug( "flags: %x\n", flags);
-	if (is_set(flags, 6)) {
-		struct mmap_record *x = mbi->mmap;
-		u32 i;
-		u32 total = mbi->mmap_length / (sizeof (struct mmap_record));
-		for (i = 0; i < total; ++i) {
-			debug("type: %x, base: %x, length: %x\n",
-			      x[i].type, x[i].base_low, x[i].length_low);
-		}
+	if (inicia_vm(mbi) == SUCESSO) {
+		klog(NOTA, "Sistema de Controle de Memoria incializado.\n");
+	} else {
+		klog(ERRO, "Sistema de controle de Memoria falhou.\n");
+		return;
 	}
 }

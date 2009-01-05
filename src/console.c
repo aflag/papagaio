@@ -26,7 +26,7 @@ static unsigned int proxima_coluna = 0;
 /* A memória 0xb8000 está mapeada na memória de video colorido. Todos PCs que eu
  * tenho acesso funcionam dessa maneira.
  */
-static char *memoria_vid = (char*)0xb8000;
+static char *memoria_vid = (char*)0xc00b8000;
 
 #define COR 0x02
 
