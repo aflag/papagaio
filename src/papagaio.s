@@ -64,9 +64,16 @@ preenche_tabela:
 	or eax, 0x80000000
 	mov cr0, eax
 
+	mov esp, stack + 0x4000
+
 	; Carrega endereço da estrutura do Multiboot
 	push ebx
 
 	call kmain
 	hlt
 	jmp $-1
+
+[section .bss]
+align 32
+stack:
+	resb 0x4000

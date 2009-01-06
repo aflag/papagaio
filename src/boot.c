@@ -27,4 +27,6 @@ void kmain(struct multiboot_info *mbi)
 		klog(ERRO, "Sistema de controle de Memoria falhou.\n");
 		return;
 	}
+
+	while(1);
 }

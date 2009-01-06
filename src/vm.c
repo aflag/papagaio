@@ -32,7 +32,8 @@ static u32 *frames_livres;
 static u32 proximo_frame;
 
 /* diretorio para as tabelas de pagina */
-static struct item_diretorio diretorio[N_ENTRADAS_DIRETORIO];
+static struct item_diretorio diretorio[N_ENTRADAS_DIRETORIO]
+	__attribute__ ((aligned(4096)));
 
 static __inline__ int existe_frame(void)
 {
@@ -50,20 +51,6 @@ static __inline__ int pop_frame(void)
 static __inline__ void adiciona_frame(u32 frame)
 {
 	frames_livres[proximo_frame++] = frame;
-}
-
-static __inline__ u32 __transf(void *ptr)
-{
-	return ((u32)ptr) & 0x003fffff;
-}
-static __inline__ void* __aloc(u32 bytes)
-{
-	u32 tmp = fim_kernel;
-
-	fim_kernel += bytes;
-	fim_kernel = (fim_kernel&0xfffff000) + 0x1000;
-
-	return (void*) (tmp + 0xc0000000);
 }
 
 static __inline__ u32 conta_frames(struct multiboot_info *mbi)
@@ -93,19 +80,37 @@ static __inline__ u32 fim_lowmem(struct multiboot_info *mbi)
 	return 0;
 }
 
+/* __transf é função temporária para transformar endereço virtual em real. Ela
+ * deve ser utilizadas apenas nas funções de iniciação.
+ */
+static __inline__ u32 __transf(void *ptr)
+{
+	return ((u32)ptr) & 0x003fffff;
+}
+
+static __inline__ void* __aloca(u32 bytes)
+{
+	u32 tmp = fim_kernel;
+
+	fim_kernel += bytes;
+	fim_kernel = (fim_kernel&0xfffff000) + 0x1000;
+
+	return (void*) (tmp + 0xc0000000);
+}
+
 static void* inicializa_tabelas(u32 inicio, u32 *total_tabelas)
 {
 	u32 n_bytes = fim_kernel - inicio;
 	u32 n_paginas = n_bytes / TAM_PAGINA;
 	u32 n_tabelas = n_paginas/N_ENTRADAS_TABELA + 1;
-	u32 i, tam_intervalo;
+	u32 i;
 	struct item_tabela *tabelas;
 
 	if (n_tabelas > (N_ENTRADAS_TABELA*n_tabelas - n_paginas))
 		++n_tabelas;
 
-	tabelas = __aloc((n_tabelas*N_ENTRADAS_TABELA)
-	                 * sizeof (struct item_tabela));
+	tabelas = __aloca((n_tabelas*N_ENTRADAS_TABELA)
+	                  * sizeof (struct item_tabela));
 
 	/* zera tabelas */
 	for (i = 0; i < n_tabelas*N_ENTRADAS_TABELA; ++i) {
@@ -123,29 +128,30 @@ static void* inicializa_tabelas(u32 inicio, u32 *total_tabelas)
 	}
 
 	/* Paginas referentes ao buraco no meio da memória */
-	tam_intervalo = (INICIO_HIGHMEM-inicio) >> 12;
-	for (i = 0; i < tam_intervalo; ++i) {
+	for (i = inicio>>12; i < (INICIO_HIGHMEM>>12); ++i) {
 		tabelas[i].rw = 1;
 		tabelas[i].pcd = 1;
 		tabelas[i].pwt = 1;
-		tabelas[i].presente = 1;
 		tabelas[i].global = 1;
-		tabelas[i].base = i + (inicio>>12);
+		tabelas[i].base = i;
+		tabelas[i].presente = 1;
 	}
 
 	/* Paginas referentes ao kernel */
-	tam_intervalo = i + ((fim_kernel-INICIO_HIGHMEM) >> 12);
-	for (; i < tam_intervalo; ++i) {
+	for (i = INICIO_HIGHMEM>>12; i < (fim_kernel>>12); ++i) {
 		tabelas[i].rw = 1;
-		tabelas[i].presente = 1;
 		tabelas[i].global = 1;
-		tabelas[i].base = i + (INICIO_HIGHMEM>>12);
+		tabelas[i].base = i;
+		tabelas[i].presente = 1;
 	}
 
 	*total_tabelas = n_tabelas;
 	return tabelas;
 }
 
+/* Esta função recebe por parâmetro a estrutura do multiboot e finaliza com o
+ * diretório definitivo alocado e funcionando.
+ */
 static void inicializa_diretorio(struct multiboot_info *mbi)
 {
 	struct item_tabela *tabelas;
@@ -181,10 +187,67 @@ static void inicializa_diretorio(struct multiboot_info *mbi)
 		diretorio[i].rw = 1;
 		diretorio[i].base = __transf(tabelas) >> 12;
 		tabelas += N_ENTRADAS_TABELA * sizeof (struct item_tabela);
+		diretorio[i].presente = 1;
 	}
+
+	/* Fazendo o seguinte eu tenho as páginas mapeadas de 0xffc00000 até
+	 * 0xffffffff
+	 */
+	diretorio[1023].rw = 1;
+	diretorio[1023].global = 1;
+	diretorio[1023].base = __transf(diretorio)>>12;
+	diretorio[1023].presente = 1;
+
+	asm volatile (
+		"mov %0, %%eax;"
+		"mov %%eax, %%cr3;"
+		:
+		: "r" (__transf(diretorio))
+		: "%eax"
+	);
 }
 
-static int cria_tabela_livres(struct multiboot_info *mbi)
+static __inline__ void* pega_tp(u32 entrada_diretorio)
+{
+	return (void*)((entrada_diretorio<<12) | 0xffc00000);
+}
+
+/* Depois que o diretorio foi alocado, podemos utilizar esta função para alocar
+ * a lista de páginas livres.
+ */
+static __inline__ void* __aloca_lista_frames(u32 bytes)
+{
+	u32 i;
+	void *base;
+	char *p;
+
+	p = base = __aloca(bytes);
+
+	for (i = 0; i < (bytes/TAM_PAGINA); ++i) {
+		u32 n_tp = ((u32)p) >> 22;
+		u32 n_p = (((u32)p)&0x003ff000) >> 12;
+		struct item_tabela *tabela;
+
+		if (!diretorio[n_tp].presente) {
+			void *tmp = __aloca(4096);
+			diretorio[n_p].rw = 1;
+			diretorio[n_p].base = (0x003ff000&__transf(tmp)) >> 12;
+			diretorio[n_p].presente = 1;
+		}
+
+		tabela = pega_tp(n_tp);
+		tabela[n_p].rw = 1;
+		tabela[n_p].global = 1;
+		tabela[n_p].base = (0x003ff000&__transf(p)) >> 12;
+		tabela[n_p].presente = 1;
+
+		p += TAM_PAGINA;
+	}
+
+	return base;
+}
+
+static int cria_lista_livres(struct multiboot_info *mbi)
 {
 	struct mmap_record *minfo = mbi->mmap;
 	u32 tam_mmap = mbi->mmap_length / (sizeof (struct mmap_record));
@@ -194,7 +257,7 @@ static int cria_tabela_livres(struct multiboot_info *mbi)
 	if (!total_frames)
 		return -1;
 	
-	frames_livres = __aloc(total_frames * sizeof (u32));
+	frames_livres = __aloca_lista_frames(total_frames * sizeof (u32));
 
 	proximo_frame = 0;
 
@@ -225,16 +288,16 @@ static int cria_tabela_livres(struct multiboot_info *mbi)
 
 int inicia_vm(struct multiboot_info *mbi)
 {
-	if (!is_set(mbi->flags, 6))
+	if (!mbi->flags.mmap)
 		return -1;
 
 	/* calcular endereço físico do final do kernel */
 	fim_kernel = __transf(&final_estatico);
 
-	inicializa_diretorio(mbi);
+	if (SUCESSO != cria_lista_livres(mbi))
+		return -2;
 
-	/*if (SUCESSO != cria_tabela_livres(mbi))
-		return -2;*/
+	inicializa_diretorio(mbi);
 
 	return 0;
 }
