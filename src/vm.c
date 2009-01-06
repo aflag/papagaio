@@ -223,7 +223,7 @@ static __inline__ void* __aloca_lista_frames(u32 bytes)
 
 	p = base = __aloca(bytes);
 
-	for (i = 0; i < (bytes/TAM_PAGINA); ++i) {
+	for (i = 0; i < (bytes/TAM_PAGINA) + 1; ++i) {
 		u32 n_tp = ((u32)p) >> 22;
 		u32 n_p = (((u32)p)&0x003ff000) >> 12;
 		struct item_tabela *tabela;
@@ -247,16 +247,14 @@ static __inline__ void* __aloca_lista_frames(u32 bytes)
 	return base;
 }
 
-static int cria_lista_livres(struct multiboot_info *mbi)
+static void cria_lista_livres(struct multiboot_info *mbi)
 {
 	struct mmap_record *minfo = mbi->mmap;
 	u32 tam_mmap = mbi->mmap_length / (sizeof (struct mmap_record));
 	u32 i, total_frames;
 
 	total_frames = conta_frames(mbi);
-	if (!total_frames)
-		return -1;
-	
+
 	frames_livres = __aloca_lista_frames(total_frames * sizeof (u32));
 
 	proximo_frame = 0;
@@ -282,22 +280,24 @@ static int cria_lista_livres(struct multiboot_info *mbi)
 				frames_livres[proximo_frame++] = frame++;
 			}
 		}
-
-	return SUCESSO;
 }
 
-int inicia_vm(struct multiboot_info *mbi)
+int inicia_vm(struct multiboot_info *m)
 {
-	if (!mbi->flags.mmap)
+	/* copia a estrutura do multiboot para dentro do espaço do kernel */
+	struct multiboot_info mbi = *m;
+	struct mmap_record mmap = *(m->mmap);
+	mbi.mmap = &mmap;
+
+	if (!mbi.flags.mmap)
 		return -1;
 
 	/* calcular endereço físico do final do kernel */
 	fim_kernel = __transf(&final_estatico);
 
-	if (SUCESSO != cria_lista_livres(mbi))
-		return -2;
+	inicializa_diretorio(&mbi);
 
-	inicializa_diretorio(mbi);
+	cria_lista_livres(&mbi);
 
 	return 0;
 }
