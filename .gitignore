@@ -8,3 +8,4 @@ papagaio
 *.log
 *.pdf
 *.dvi
+.deps
