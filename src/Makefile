@@ -15,9 +15,9 @@ C_SRCS = boot.c\
          klog.c
 # mm/
 C_SRCS += alocacao_fisica.c\
-	  paginacao_ia32.c\
+          paginacao_ia32.c\
           paginacao.c\
-	  mm.c
+          mm.c
 
 OBJ = $(addprefix $(OBJDIR),$(C_SRCS:.c=.o))\
       $(addprefix $(OBJDIR),$(A_SRCS:.s=.o))
