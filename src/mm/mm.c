@@ -1,4 +1,4 @@
-/*  Copyright (c) 2008, 2009, Rafael Cunha de Almeida <almeidaraf@gmail.com>
+/*  Copyright (c) 2009, Rafael Cunha de Almeida <almeidaraf@gmail.com>
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -13,20 +13,27 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-#include <tipos.h>
-#include <multiboot.h>
-#include <klog.h>
 #include <mm/mm.h>
+#include <multiboot.h>
 
-/* Função inicial do kernel. É aqui que tudo começa :-). */
-void kmain(struct multiboot_info *mbi)
+/* Final do kernel contando apenas o código e conteúdo estático (colocado na
+ * tabela de simbolos pelo linker).
+ */
+extern int final_estatico;
+
+int inicializa_mm(struct multiboot_info *mbi)
 {
-	if (inicializa_mm(mbi) == SUCESSO) {
-		klog(NOTA, "Sistema de Controle de Memoria incializado.\n");
-	} else {
-		klog(ERRO, "Sistema de controle de Memoria falhou.\n");
-		return;
-	}
+	int erro;
 
-	while(1);
+	if (!mbi->flags.mmap)
+		return -1;
+
+	u32 final = __virtual_real_precoce(&final_estatico);
+
+	erro = inicializa_alocacao_fisica(mbi, final);
+	if (erro) return erro;
+	erro = inicializa_paginacao(mbi);
+	if (erro) return erro;
+
+	return 0;
 }

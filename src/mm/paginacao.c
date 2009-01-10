@@ -1,4 +1,4 @@
-/*  Copyright (c) 2008, 2009, Rafael Cunha de Almeida <almeidaraf@gmail.com>
+/*  Copyright (c) 2009, Rafael Cunha de Almeida <almeidaraf@gmail.com>
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -16,17 +16,27 @@
 #include <tipos.h>
 #include <multiboot.h>
 #include <klog.h>
+#include <string.h>
 #include <mm/mm.h>
 
-/* Função inicial do kernel. É aqui que tudo começa :-). */
-void kmain(struct multiboot_info *mbi)
-{
-	if (inicializa_mm(mbi) == SUCESSO) {
-		klog(NOTA, "Sistema de Controle de Memoria incializado.\n");
-	} else {
-		klog(ERRO, "Sistema de controle de Memoria falhou.\n");
-		return;
-	}
+#include "paginacao_ia32.h"
 
-	while(1);
+/*
+ * __virtual_real_precoce - transforma um endereço virtual em real conforme o
+ * sistema de paginação em vigor antes da inicialização completa do sistema.
+ * @ptr - pointeiro para o endereço virtual
+ */
+inline u32 __virtual_real_precoce(void *ptr)
+{
+	return ((u32)ptr) & 0x003fffff;
+}
+
+struct paginacao *tab_paginas;
+
+int inicializa_paginacao(struct multiboot_info *mbi)
+{
+	tab_paginas = inicializa_paginacao_ia32(aloca_inicial, mbi);
+	tab_paginas->use_alocador(aloca_fis);
+
+	return 0;
 }

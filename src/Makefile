@@ -1,38 +1,62 @@
-MAKEDEPEND = gcc -M
-
 DEPDIR = .deps
+
+CC = gcc
+
+# A / no final do diretorio é fundamental
+OBJDIR = obj/
 
 BIN = papagaio
 
-SRCS = boot.c\
-       console.c\
-       string.c\
-       klog.c\
-       vm.c
-OBJ = $(SRCS:.c=.o) papagaio.o
+A_SRCS = papagaio.s
+
+C_SRCS = boot.c\
+         console.c\
+         string.c\
+         klog.c
+# mm/
+C_SRCS += alocacao_fisica.c\
+	  paginacao_ia32.c\
+          paginacao.c\
+	  mm.c
+
+OBJ = $(addprefix $(OBJDIR),$(C_SRCS:.c=.o))\
+      $(addprefix $(OBJDIR),$(A_SRCS:.s=.o))
 
 CPPFLAGS = -Iinclude/
 CFLAGS = -O2 -W -Wall -m32 -fno-strict-aliasing -fno-builtin\
 -nostdlib -static -fno-stack-protector
 
+MAKEDEPEND = gcc -M
+
 .PHONY: all clean
 all: papagaio
 clean:
-	rm -f $(OBJ)
+	rm -rf $(OBJDIR) $(BIN) $(DEPDIR)
 
 
 papagaio: $(OBJ) papagaio.ld
 	ld -Tpapagaio.ld -melf_i386 $(OBJ) -opapagaio
 
-papagaio.o: papagaio.s
-	nasm -felf32 papagaio.s
+obj/papagaio.o: papagaio.s
+	nasm -felf32 papagaio.s -o$(OBJDIR)/papagaio.o
 
-%.o : %.c
-	$(COMPILE.c) -MMD -o $@ $<
-	@mv $(*F).d $(DEPDIR)/
+obj/%.o : %.c
+	@mkdir -p $(OBJDIR) $(DEPDIR)
+	$(COMPILE.c) -MMD -o $(OBJDIR)/$(@F) $<
+	@mv $(OBJDIR)/$(*F).d $(DEPDIR)/
 	@cp $(DEPDIR)/$(*F).d $(DEPDIR)/$(*F).P; \
 	sed -e 's/#.*//' -e 's/^[^:]*: *//' -e 's/ *\\$$//' \
 	    -e '/^$$/ d' -e 's/$$/ :/' < $(DEPDIR)/$(*F).d >> $(DEPDIR)/$(*F).P; \
 	rm -f $(DEPDIR)/$(*F).d
 
--include $(SRCS:%.c=$(DEPDIR)/%.P)
+obj/%.o : mm/%.c
+	@mkdir -p $(OBJDIR) $(DEPDIR)
+	$(COMPILE.c) -MMD -o $(OBJDIR)/$(@F) $<
+	@mv $(OBJDIR)/$(*F).d $(DEPDIR)/
+	@cp $(DEPDIR)/$(*F).d $(DEPDIR)/$(*F).P; \
+	sed -e 's/#.*//' -e 's/^[^:]*: *//' -e 's/ *\\$$//' \
+	    -e '/^$$/ d' -e 's/$$/ :/' < $(DEPDIR)/$(*F).d >> $(DEPDIR)/$(*F).P; \
+	rm -f $(DEPDIR)/$(*F).d
+
+
+-include $(C_SRCS:%.c=$(DEPDIR)/%.P)
