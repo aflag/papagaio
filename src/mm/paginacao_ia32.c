@@ -283,6 +283,7 @@ static void mapeamento_inicial(struct multiboot_info *mbi)
 		tabela[id_pagina].base = i;
 		tabela[id_pagina].presente = 1;
 	}
+
 	flush_ia32();
 }
 
