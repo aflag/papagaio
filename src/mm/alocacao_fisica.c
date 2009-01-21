@@ -80,15 +80,15 @@ int aloca_fis(u32 bytes, u32 *endereco)
 }
 
 /*
- * aloca_inicial - aloca bytes da memória física. Esta função deve ser utilizada
- *                 na inicialização da paginação. Ela deve retornar um endereço
- *                 menor que 4MB ou FALTA_ESPACO quando não existir tal endereço
- *                 livre. Esta função depende da função cria_lista_livres
- *                 começar a empilhar os endereços em ordem decrescente.
+ * aloca_boot - aloca bytes da memória física. Esta função deve ser utilizada
+ *              na inicialização da paginação. Ela deve retornar um endereço
+ *              menor que 4MB ou FALTA_ESPACO quando não existir tal endereço
+ *              livre. Esta função depende da função cria_lista_livres
+ *              começar a empilhar os endereços em ordem decrescente.
  * @bytes    - quantidade de memória a ser alocada.
  * @endereco - endereco do espaco alocado.
  */
-int aloca_inicial(u32 bytes, u32 *endereco)
+int aloca_boot(u32 bytes, u32 *endereco)
 {
 	if (existe_frame() && (frames_livres[proximo_frame-1] > (0x400000>>12)))
 		return FALTA_ESPACO;

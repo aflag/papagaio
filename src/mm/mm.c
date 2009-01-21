@@ -28,7 +28,7 @@ int inicializa_mm(struct multiboot_info *mbi)
 	if (!mbi->flags.mmap)
 		return -1;
 
-	u32 final = __virtual_real_precoce(&final_estatico);
+	u32 final = virtual_real_boot(&final_estatico);
 
 	erro = inicializa_alocacao_fisica(mbi, final);
 	if (erro) return erro;

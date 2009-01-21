@@ -65,7 +65,7 @@ static void inicializa_diretorio_ia32(void)
 {
 	u32 i;
 
-	endereco_fisico_dir = __virtual_real_precoce(diretorio);
+	endereco_fisico_dir = virtual_real_boot(diretorio);
 
 	/* zera diretorio */
 	memset(diretorio, 0, sizeof diretorio);
@@ -94,6 +94,16 @@ static inline void flush_ia32(void)
 		"mov %%eax, %%cr3;"
 		:
 		: "a" (endereco_fisico_dir)
+	);
+}
+
+static inline void flush_endereco_ia32(void *ptr)
+{
+	asm volatile (
+		"invlpg (%0);"
+		:
+		: "r" ((u32) ptr)
+		: "memory"
 	);
 }
 
@@ -216,6 +226,7 @@ static struct paginacao pag = {
 	.adiciona = adiciona_ia32,
 	.remove = remove_ia32,
 	.flush = flush_ia32,
+	.flush_endereco = flush_endereco_ia32,
 	.virtual_real = virtual_real_ia32,
 	.use_alocador = use_alocador_ia32,
 	.inicio_reservado = 0xffc00000,

@@ -6,7 +6,7 @@
 /* transforma endereços virtuais em físicos antes da paginação ter sido
  * propriamente inicializada
  */
-inline u32 __virtual_real_precoce(void *ptr);
+inline u32 virtual_real_boot(void *ptr);
 
 #define TAM_PAGINA 4096
 #define HIGH_HALF 0xc0000000
@@ -32,6 +32,7 @@ struct paginacao {
 	int (*adiciona)(u32 p_virtual, u32 f_fisico, u32 flags);
 	int (*remove)(u32 p_virtual);
 	void (*flush)(void);
+	void (*flush_endereco)(void*);
 	int (*virtual_real)(void *end_virtual, u32 *end_real);
 	void (*use_alocador)(int (*aloc)(u32 bytes, u32 *end));
 	u32 inicio_reservado;
