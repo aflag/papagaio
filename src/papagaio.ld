@@ -16,7 +16,9 @@
 ENTRY(inicio)
 SECTIONS
 {
-	. = 0x100000;
+	. = 0x1000000;
+
+	inicio_estatico = .;
 
 	.comeco :
 	{

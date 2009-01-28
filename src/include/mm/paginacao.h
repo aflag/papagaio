@@ -3,14 +3,11 @@
 /* public domain */
 
 #include <tipos.h>
-/* transforma endereços virtuais em físicos antes da paginação ter sido
- * propriamente inicializada
- */
-inline u32 virtual_real_boot(void *ptr);
 
 #define TAM_PAGINA 4096
-#define HIGH_HALF 0xc0000000
-#define INICIO_HIGHMEM 0x100000
+#define INICIO_VIRTUAL 0xc0000000
+#define KERNEL_FISICO 0x01000000
+#define HIGH_MEM 0x100000
 
 /* flags para a criacao de páginas */
 #define KERN           0x00000001
@@ -33,7 +30,7 @@ struct paginacao {
 	int (*remove)(u32 p_virtual);
 	void (*flush)(void);
 	void (*flush_endereco)(void*);
-	int (*virtual_real)(void *end_virtual, u32 *end_real);
+	int (*virtual_fisico)(void *end_virtual, u32 *end_real);
 	void (*use_alocador)(int (*aloc)(u32 bytes, u32 *end));
 	u32 inicio_reservado;
 	u32 fim_reservado;
@@ -42,5 +39,9 @@ struct paginacao {
 extern struct paginacao *tab_paginas;
 
 int inicializa_paginacao(struct multiboot_info *mbi);
+
+void paginacao_carrega_funcoes_boot(void);
+
+int (*virtual_fisico_boot)(void *end_virtual, u32 *end_real);
 
 #endif

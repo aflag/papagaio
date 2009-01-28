@@ -90,7 +90,7 @@ int aloca_fis(u32 bytes, u32 *endereco)
  */
 int aloca_boot(u32 bytes, u32 *endereco)
 {
-	if (existe_frame() && (frames_livres[proximo_frame-1] > (0x400000>>12)))
+	if (existe_frame() && (frames_livres[proximo_frame-1] > (0x1400000>>12)))
 		return FALTA_ESPACO;
 	return aloca_fis(bytes, endereco);
 }
@@ -111,7 +111,8 @@ void libera_fis(u32 end)
  * F u n ç õ e s  d e  i n i c i a l i z a ç ã o
  */
 /*
- * Calcula o número de frames disponíveis na memória física.
+ * Calcula o número de frames disponíveis na memória física (sem contar qualquer
+ * coisa antes do espaço de alocação do kernel).
  */
 static __inline__ u32 conta_frames(struct multiboot_info *mbi)
 {
@@ -122,8 +123,17 @@ static __inline__ u32 conta_frames(struct multiboot_info *mbi)
 
 	for (i = 0; i < tam; ++i)
 		/* tipo 1 = memoria utilizavel */
-		if (minfo[i].type == 1)
-			total += minfo[i].length_low >> 12;
+		if (minfo[i].type == 1) {
+			u32 base = minfo[i].base_low, tam = minfo[i].length_low;
+			u32 ultimo = (base + tam) >> 12;
+			u32 primeiro;
+			if (base > fim_kernel)
+				primeiro = fim_kernel >> 12;
+			else
+				primeiro = base >> 12;
+
+			total += ultimo - primeiro;
+		}
 
 	return total;
 }
@@ -140,7 +150,7 @@ static __inline__ void* __aloca(u32 bytes)
 	fim_kernel += bytes;
 	fim_kernel = (fim_kernel&0xfffff000) + 0x1000;
 
-	return (void*) (tmp + HIGH_HALF);
+	return (void*) (tmp + INICIO_VIRTUAL);
 }
 
 /* 
@@ -162,23 +172,19 @@ static void cria_lista_livres(struct multiboot_info *mbi)
 	for (i = tam_mmap-1; i >= 0; --i)
 		if (minfo[i].type == 1) {
 			u32 base = minfo[i].base_low, tam = minfo[i].length_low;
-			u32 frame = base >> 12;
+			u32 primeiro = base >> 12;
 			u32 ultimo = (base + tam) >> 12;
+			u32 frame;
 
 			if (base & 0x00000fff) {
 				klog(ALERTA, "Memoria nao alinhada:\n");
 				klog(ALERTA, "  %x\n", base);
 			}
 
-			while (frame < ultimo) {
-				/* Reserva a parte já alocada pelo kernel */
-				if ((0x100000>>12) <= frame
-				    && frame <= (fim_kernel>>12)) {
-					++frame;
-					continue;
-				}
-				frames_livres[proximo_frame++] = frame++;
-			}
+			frame = ultimo;
+			while ((frame >= primeiro)
+			       && (frame >= (fim_kernel>>12)))
+				frames_livres[proximo_frame++] = frame--;
 		}
 }
 

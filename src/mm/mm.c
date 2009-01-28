@@ -14,7 +14,9 @@
  */
 
 #include <mm/mm.h>
+#include <mm/paginacao.h>
 #include <multiboot.h>
+#include <klog.h>
 
 /* Final do kernel contando apenas o código e conteúdo estático (colocado na
  * tabela de simbolos pelo linker).
@@ -24,11 +26,15 @@ extern int final_estatico;
 int inicializa_mm(struct multiboot_info *mbi)
 {
 	int erro;
+	u32 final;
 
 	if (!mbi->flags.mmap)
 		return -1;
 
-	u32 final = virtual_real_boot(&final_estatico);
+	paginacao_carrega_funcoes_boot();
+
+	erro = virtual_fisico_boot(&final_estatico, &final);
+	if (erro) return erro;
 
 	erro = inicializa_alocacao_fisica(mbi, final);
 	if (erro) return erro;

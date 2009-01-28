@@ -16,6 +16,8 @@
 
 [extern kmain]
 [extern final_kernel]
+
+[global tpag_inicial]
 [global inicio]
 
 [section .comeco]
@@ -66,26 +68,20 @@ CR4_VME equ (1<<1)
 CR4_FLAGS equ (CR4_PSE | CR4_PGE)
 ; -*- -*-
 
-
 inicio:
 	cli	;
 
-	mov ecx, 0		; Preenche o diretório de páginas com a entrada
-preenche_tabela:		; 0x19b. Assim todas entradas apontam para a
-	mov eax, ecx		; página 0. Bits ligados:
-	shl eax, 2		;     * Present (bit 0)
-	mov [eax], dword 0x19b	;     * R/W (bit 1)
-	cmp ecx, 1024		;     * PWT (bit 3)
-	inc ecx			;     * PCD (bit 4)
-	jb preenche_tabela	;     * PS (bit 7)
-				;     * Global (bit 8)
+	mov edx, tpag_inicial
+	and edx, 0xffc00000
+	or edx, 0x9b
+	mov [tpag_inicial+4092], edx
 
-	mov eax, 0	; O diretório de páginas encontra-se no endereço
-	mov cr3, eax	; físico 0x0.
+	mov eax, tpag_inicial	; O diretório de páginas encontra-se no endereço
+	mov cr3, eax		; físico tpag_inicial.
 
-	mov edx, cr4		; Liga o bit no registrador cr4 que faz
-	or edx, CR4_FLAGS	; com que a paginação seja feita com
-	mov cr4, edx		; páginas de 4MB.
+	mov ecx, cr4		; Liga o bit no registrador cr4 que faz
+	or ecx, CR4_FLAGS	; com que a paginação seja feita com
+	mov cr4, ecx		; páginas de 4MB.
 
 	mov eax, cr0		; Liga paginação no registrador cr0.
 	or eax, CR0_FLAGS	;
@@ -98,6 +94,49 @@ preenche_tabela:		; 0x19b. Assim todas entradas apontam para a
 	call kmain	;
 	hlt		;
 	jmp $-1		;
+
+
+; -*- Macros para tabela de páginas -*-
+	; tpag_entrada - Gera uma entrada para a pagina especificada, dado o
+	;                numero da página. Bits ligados:
+	;                    * Present (bit 0)
+	;                    * R/W (bit 1)
+	;                    * PWT (bit 3)
+	;                    * PCD (bit 4)
+	;                    * PS (bit 7)
+%define tpag_entrada(num_pag) (((num_pag)<<22) | 0x9b)
+
+	; pula_entradas - Retorna a distância entre a posição da entrada
+	;                 desejada e a posição da entrada atual.
+%define pula_entradas(pos_desejada, pos_atual) ((pos_desejada) - (pos_atual))
+
+	; endereco_entrada - Transforma um endereço na posição da entrada na
+	;                    tabela de páginas.
+%define pagina(endereco) (endereco>>22)
+
+KERNEL_FISICO equ pagina(0x01000000)
+INICIO_VIRTUAL equ pagina(0xc0000000)
+; -*- -*-
+
+; Tabela de pagina inicial:
+; 0x00000000 - 0x01400000 físico = 0x00000000 - 0x01400000 virtual
+; 0x00000000 - 0x01400000 físico = 0xc0000000 - 0xc1400000 virtual
+align 4096
+tpag_inicial:
+	dd tpag_entrada(0)
+	dd tpag_entrada(1)
+	dd tpag_entrada(2)
+	dd tpag_entrada(3)
+	dd tpag_entrada(4)
+
+	times pula_entradas(INICIO_VIRTUAL, KERNEL_FISICO+1) dd 0
+	dd tpag_entrada(0)
+	dd tpag_entrada(1)
+	dd tpag_entrada(2)
+	dd tpag_entrada(3)
+	dd tpag_entrada(4)
+
+	times pula_entradas(pagina(0xffffffff), INICIO_VIRTUAL+5) dd 0
 
 [section .bss]
 align 32

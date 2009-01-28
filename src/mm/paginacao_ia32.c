@@ -18,6 +18,8 @@
 #include <mm/mm.h>
 #include <klog.h>
 
+#include "paginacao_ia32.h"
+
 struct item_diretorio {
 	u32 presente:1;
 	u32 rw:1;
@@ -58,32 +60,6 @@ static u32 endereco_fisico_dir;
 
 static int (*aloc)(u32 bytes, u32 *end);
 
-/* Esta função recebe por parâmetro a estrutura do multiboot e finaliza com o
- * diretório definitivo alocado e funcionando.
- */
-static void inicializa_diretorio_ia32(void)
-{
-	u32 i;
-
-	endereco_fisico_dir = virtual_real_boot(diretorio);
-
-	/* zera diretorio */
-	memset(diretorio, 0, sizeof diretorio);
-
-	/* privilegios de read/write e user/supervisor devem ser feitos na
-	 * tabela de páginas.
-	 */
-	for (i = 0; i < N_ENTRADAS_DIRETORIO; ++i) {
-		diretorio[i].rw = 1;
-		diretorio[i].us = 1;
-	}
-
-	/* Tabelas de páginas mapeadas de 0xffc00000 até 0xffffffff. */
-	diretorio[1023].us = 0;
-	diretorio[1023].base = endereco_fisico_dir>>12;
-	diretorio[1023].presente = 1;
-}
-
 /*
  * Efetiva qualquer alteração que tenha sido feita na tabela de páginas ao se
  * chamar as funções de relacionamento de páginas.
@@ -112,7 +88,7 @@ static inline void* pega_tp(u32 entrada_diretorio)
 	return (void*)((entrada_diretorio<<12) | 0xffc00000);
 }
 
-static inline int cria_diretorio(u32 id)
+static inline int cria_tabela(u32 id)
 {
 	u32 tmp;
 	int erro;
@@ -125,7 +101,6 @@ static inline int cria_diretorio(u32 id)
 	diretorio[id].presente = 1;
 
 	tabela = pega_tp(id);
-
 	memset(tabela, 0, 4096);
 
 	return 0;
@@ -147,10 +122,9 @@ static int adiciona_ia32(u32 p_virtual, u32 f_fisico, u32 flags)
 
 	if (!diretorio[id_tabela].presente) {
 		int erro;
-		erro = cria_diretorio(id_tabela);
+		erro = cria_tabela(id_tabela);
 		if (erro) return erro;
 	}
-
 	tabela = pega_tp(id_tabela);
 
 	if (tabela[id_pagina].presente && !(flags & FORCE))
@@ -199,7 +173,7 @@ static int remove_ia32(u32 p_virtual)
  * @end_virtual - os 32 bits de endereço real que se quer transformar em físico.
  * @end_real    - endereço físico resultante da transformação.
  */
-static int virtual_real_ia32(void *end_virtual, u32 *end_real)
+static int virtual_fisico_ia32(void *end_virtual, u32 *end_real)
 {
 	struct item_tabela *tabela;
 	u32 virtual = (u32) end_virtual;
@@ -217,6 +191,32 @@ static int virtual_real_ia32(void *end_virtual, u32 *end_real)
 	return 0;
 }
 
+/*
+ * virtual_fisico_boot_ia32 - transforma um endereço virtual em um endereço
+ *                            fisico durante a inicialização do sistema.
+ * @end_virtual - os 32 bits de endereço real que se quer transformar em físico.
+ * @end_real    - endereço físico resultante da transformação.
+ */
+extern char tpag_inicial;
+int virtual_fisico_boot_ia32(void *end_virtual, u32 *end_real)
+{
+	struct item_diretorio *tpag =
+		(struct item_diretorio*) &tpag_inicial;
+	u32 virtual = (u32) end_virtual;
+	u32 id_diretorio = virtual >> 22;
+	u32 base;
+
+	if (!tpag[id_diretorio].presente)
+		return PAGINA_INEXISTENTE;
+
+	base = tpag[id_diretorio].base;
+	base = base >> 10;
+	base = base << 22;
+	*end_real = base | (virtual&0x003fffff);
+
+	return 0;
+}
+
 static void use_alocador_ia32(int (*f)(u32 bytes, u32 *end))
 {
 	aloc = f;
@@ -227,19 +227,17 @@ static struct paginacao pag = {
 	.remove = remove_ia32,
 	.flush = flush_ia32,
 	.flush_endereco = flush_endereco_ia32,
-	.virtual_real = virtual_real_ia32,
+	.virtual_fisico = virtual_fisico_ia32,
 	.use_alocador = use_alocador_ia32,
 	.inicio_reservado = 0xffc00000,
 	.fim_reservado = 0xffffffff,
 };
 
 /*
- * Encontra o final da memória inferior (low memory). Depois dela existem
- * endereços para acessar a rom da BIOS e a placa de vídeo. E depois disso (a
- * partir de INICIO_HIGHMEM existe o kernel que vai até a variável
- * final_estatico.
+ * Entre o valor retornado por fim_lowmem e HIGH_MEM existe um espaço com
+ * endereços para acessar video e ROM.
  */
-static __inline__ u32 fim_lowmem(struct multiboot_info *mbi)
+static inline u32 fim_lowmem(struct multiboot_info *mbi)
 {
 	struct mmap_record *minfo = mbi->mmap;
 	u32 i; 
@@ -251,51 +249,112 @@ static __inline__ u32 fim_lowmem(struct multiboot_info *mbi)
 	return 0;
 }
 
+static inline void* pega_tp_boot(u32 id)
+{
+	return (void*) (diretorio[id].base << 12);
+}
+
+static inline int cria_tabela_boot(u32 id)
+{
+	u32 tmp;
+	int erro;
+	struct tabela_item *tabela;
+
+	erro = aloc(4096, &tmp);
+	if (erro)
+		return FALTA_MEMORIA;
+	diretorio[id].base = tmp>>12;
+	diretorio[id].presente = 1;
+
+	tabela = pega_tp_boot(id);
+	memset(tabela, 0, 4096);
+
+	return 0;
+}
+
 static void mapeamento_inicial(struct multiboot_info *mbi)
 {
-	u32 base = HIGH_HALF >> 12;
-	u32 i, inicio_utilizado;
+	u32 base = num_pagina(INICIO_VIRTUAL);
+	u32 i;
+	u32 inicio_buraco = fim_lowmem(mbi);
 
-	inicio_utilizado = fim_lowmem(mbi);
-
-	/* Paginas referentes ao buraco no meio da memória */
-	for (i = inicio_utilizado>>12; i < (INICIO_HIGHMEM>>12); ++i) {
+	/* paginas reservadas para comunicacao com hardware (parte lowmem) */
+	for (i = 0; i < num_pagina(inicio_buraco); ++i) {
 		struct item_tabela *tabela;
-		u32 id_tabela = (i+base) >> 10;
-		u32 id_pagina = (i+base) & 0x000003ff;
+		u32 id_diretorio = indice_diretorio(i+base);
+		u32 id_tabela = indice_tabela(i+base);
 
-		if (!diretorio[id_tabela].presente)
-			cria_diretorio(id_tabela);
+		if (!diretorio[id_diretorio].presente)
+			cria_tabela_boot(id_diretorio);
+		tabela = pega_tp_boot(id_diretorio);
 
-		tabela = (void*)(diretorio[id_tabela].base << 12);
-
-		memset(&(tabela[id_pagina]), 0, sizeof (struct item_tabela));
-
-		tabela[id_pagina].rw = 1;
-		tabela[id_pagina].pcd = 1;
-		tabela[id_pagina].base = i;
-		tabela[id_pagina].presente = 1;
+		tabela[id_tabela].rw = 1;
+		tabela[id_tabela].global = 1;
+		tabela[id_tabela].base = i;
+		tabela[id_tabela].presente = 1;
 	}
 
-	/* Paginas referentes ao kernel */
-	for (i = INICIO_HIGHMEM>>12; i < (fim_kernel>>12); ++i) {
+	/* Paginas referentes ao buraco no meio da memória */
+	for (i = num_pagina(inicio_buraco); i < num_pagina(HIGH_MEM); ++i) {
 		struct item_tabela *tabela;
-		u32 id_tabela = (i+base) >> 10;
-		u32 id_pagina = (i+base) & 0x000003ff;
+		u32 id_diretorio = indice_diretorio(i+base);
+		u32 id_tabela = indice_tabela(i+base);
 
-		if (!diretorio[id_tabela].presente)
-			cria_diretorio(id_tabela);
+		if (!diretorio[id_diretorio].presente)
+			cria_tabela_boot(id_diretorio);
+		tabela = pega_tp_boot(id_diretorio);
 
-		tabela = (void*)(diretorio[id_tabela].base << 12);
+		tabela[id_tabela].rw = 1;
+		tabela[id_tabela].pcd = 1;
+		tabela[id_tabela].global = 1;
+		tabela[id_tabela].base = i;
+		tabela[id_tabela].presente = 1;
+	}
 
-		memset(&(tabela[id_pagina]), 0, sizeof (struct item_tabela));
+	/* paginas reservadas para comunicacao com hardware (parte highmem) e
+	 * paginas referentes ao kernel */
+	for (i = num_pagina(HIGH_MEM); i < num_pagina(fim_kernel); ++i) {
+		struct item_tabela *tabela;
+		u32 id_diretorio = indice_diretorio(i+base);
+		u32 id_tabela = indice_tabela(i+base);
 
-		tabela[id_pagina].rw = 1;
-		tabela[id_pagina].base = i;
-		tabela[id_pagina].presente = 1;
+		if (!diretorio[id_diretorio].presente)
+			cria_tabela_boot(id_diretorio);
+		tabela = pega_tp_boot(id_diretorio);
+
+		tabela[id_tabela].rw = 1;
+		tabela[id_tabela].global = 1;
+		tabela[id_tabela].base = i;
+		tabela[id_tabela].presente = 1;
 	}
 
 	flush_ia32();
+}
+
+/* Esta função recebe por parâmetro a estrutura do multiboot e finaliza com o
+ * diretório definitivo alocado e funcionando.
+ */
+static void inicializa_diretorio_ia32(void)
+{
+	u32 i;
+
+	virtual_fisico_boot_ia32(diretorio, &endereco_fisico_dir);
+
+	/* zera diretorio */
+	memset(diretorio, 0, sizeof diretorio);
+
+	/* privilegios de read/write e user/supervisor devem ser feitos na
+	 * tabela de páginas.
+	 */
+	for (i = 0; i < N_ENTRADAS_DIRETORIO; ++i) {
+		diretorio[i].rw = 1;
+		diretorio[i].us = 1;
+	}
+
+	/* Tabelas de páginas mapeadas de 0xffc00000 até 0xffffffff. */
+	diretorio[1023].us = 0;
+	diretorio[1023].base = endereco_fisico_dir>>12;
+	diretorio[1023].presente = 1;
 }
 
 void* inicializa_paginacao_ia32(int (*f)(u32 bytes, u32 *end),

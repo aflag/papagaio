@@ -21,17 +21,12 @@
 
 #include "paginacao_ia32.h"
 
-/*
- * __virtual_real_boot - transforma um endereço virtual em real conforme o
- * sistema de paginação em vigor antes da inicialização completa do sistema.
- * @ptr - pointeiro para o endereço virtual
- */
-inline u32 virtual_real_boot(void *ptr)
-{
-	return ((u32)ptr) & 0x003fffff;
-}
-
 struct paginacao *tab_paginas;
+
+void paginacao_carrega_funcoes_boot(void)
+{
+	virtual_fisico_boot = virtual_fisico_boot_ia32;
+}
 
 int inicializa_paginacao(struct multiboot_info *mbi)
 {
