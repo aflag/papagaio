@@ -9,3 +9,4 @@ papagaio
 *.pdf
 *.dvi
 .deps
+core

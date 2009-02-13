@@ -37,16 +37,16 @@ static inline u32 indice(u32 necessario)
 
 	i = 0;
 	do {
-		possivel = 1<<i;
+		possivel = 1 << (i+MENOR_POTENCIA);
 		++i;
 	} while (possivel < necessario);
 
-	return i;
+	return i-1;
 }
 
 static inline u16 cheio(struct frame *f)
 {
-	return f->offset < TAM_FRAME;
+	return f->offset >= TAM_FRAME;
 }
 
 static inline u16 tamanho_bloco(u16 indice)
@@ -103,7 +103,7 @@ static void* aloca_novo_frame(u16 indice)
 
 	tab_paginas->adiciona(prshift(p->endereco), prshift(f->endereco),
 	                      KERN | RW | GLOBAL);
-	tab_paginas->flush();
+	tab_paginas->flush_endereco((void*)p->endereco);
 
 	LIST_INSERT_HEAD(&listas[indice], f, frames);
 
@@ -158,7 +158,6 @@ void inicializa_malloc(void)
 		                      KERN | RW | GLOBAL);
 	}
 	paginas = (void*) plshift(inicio);
-	tab_paginas->flush();
 
 	u32 p = inicio;
 	for (i = 0; i < no_paginas; ++i, ++p) {
