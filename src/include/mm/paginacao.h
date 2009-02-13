@@ -31,9 +31,9 @@ struct paginacao {
 	void (*flush)(void);
 	void (*flush_endereco)(void*);
 	int (*virtual_fisico)(void *end_virtual, u32 *end_real);
-	void (*use_alocador)(int (*aloc)(u32 bytes, u32 *end));
-	u32 inicio_reservado;
-	u32 fim_reservado;
+	void (*use_alocador)(struct frame* (*aloc)(void));
+	u32 inicio_heap;
+	u32 fim_heap;
 };
 
 extern struct paginacao *tab_paginas;
@@ -43,5 +43,10 @@ int inicializa_paginacao(struct multiboot_info *mbi);
 void paginacao_carrega_funcoes_boot(void);
 
 int (*virtual_fisico_boot)(void *end_virtual, u32 *end_real);
+
+#define prshift(endereco) ((endereco)>>12)
+#define plshift(pagina) ((pagina)<<12)
+
+#define bytes_paginas(bytes) (1 + (bytes / 4096))
 
 #endif

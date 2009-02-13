@@ -17,6 +17,7 @@
 #include <mm/paginacao.h>
 #include <multiboot.h>
 #include <klog.h>
+#include <malloc.h>
 
 /* Final do kernel contando apenas o código e conteúdo estático (colocado na
  * tabela de simbolos pelo linker).
@@ -40,6 +41,7 @@ int inicializa_mm(struct multiboot_info *mbi)
 	if (erro) return erro;
 	erro = inicializa_paginacao(mbi);
 	if (erro) return erro;
+	inicializa_malloc();
 
 	return 0;
 }

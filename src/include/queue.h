@@ -35,6 +35,10 @@
 #ifndef	__QUEUE_H
 #define	__QUEUE_H
 
+#ifndef NULL
+#define NULL ((void*)0)
+#endif
+
 /*
  * This file defines five types of data structures: singly-linked lists, 
  * lists, simple queues, tail queues, and circular queues.

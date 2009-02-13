@@ -17,6 +17,7 @@ C_SRCS = boot.c\
 C_SRCS += alocacao_fisica.c\
           paginacao_ia32.c\
           paginacao.c\
+	  malloc.c\
           mm.c
 
 OBJ = $(addprefix $(OBJDIR),$(C_SRCS:.c=.o))\

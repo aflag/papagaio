@@ -4,18 +4,26 @@
 
 #include <multiboot.h>
 #include <tipos.h>
+#include <queue.h>
 
 extern u32 fim_kernel;
 
-int aloca_fis(u32 bytes, u32 *endereco);
-int aloca_boot(u32 bytes, u32 *endereco);
-void libera_fis(u32 end);
+struct frame {
+	LIST_ENTRY(frame) frames;
+	u32 endereco;
+	u16 offset;
+	u16 contador;
+	void *meta_pagina;
+};
+
+struct frame* aloca_fis(void);
+struct frame* aloca_boot(void);
+void libera_fis(struct frame *f);
 
 int inicializa_alocacao_fisica(struct multiboot_info *mbi, u32 final);
 
 enum {
-	TODOS_FRAMES_OCUPADOS = 1,
-	FALTA_ESPACO
+	FALTA_ESPACO = 1,
 };
 
 #define TAM_FRAME 4096

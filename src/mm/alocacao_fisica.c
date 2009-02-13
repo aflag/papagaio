@@ -17,66 +17,54 @@
 #include <multiboot.h>
 #include <klog.h>
 #include <mm/mm.h>
+#include <queue.h>
 
 /* Final do kernel com o código, conteúdo estático e mais a tabela de frames
  * livres.
  */
 u32 fim_kernel;
 
-static u32 *frames_livres;
-static u32 proximo_frame;
+struct frame *frames;
 
-/*
- * F u n ç õ e s  A u x i l i a r e s.
- */
-/*
- * Determina se a lista de frames está vazia (0) ou ainda há frames (>0).
- */
-static __inline__ int existe_frame(void)
-{
-	return proximo_frame;
-}
+static LIST_HEAD(, frame) frames_livres = LIST_HEAD_INITIALIZER(frames_livres);
 
-/*
- * Retira um frame da lista.
- */
-static __inline__ int pop_frame(u32 *frame)
-{
-	if (!existe_frame())
-		return TODOS_FRAMES_OCUPADOS;
-
-	*frame = frames_livres[--proximo_frame];
-
-	return 0;
-}
-
-/*
- * Adiciona um novo frame à lista.
- */
-static __inline__ void adiciona_frame(u32 frame)
-{
-	frames_livres[proximo_frame++] = frame;
-}
+static u32 ultimo_frame;
 
 /*
  * I n t e r f a c e
  */
 /*
- * aloca_fis - aloca bytes na memória física.
- * @bytes    - quantidade de memória a ser alocada.
+ * aloca_fis - aloca um frame da memória física.
  * @endereco - endereco do espaco alocado.
  */
-int aloca_fis(u32 bytes, u32 *endereco)
+struct frame* aloca_fis(void)
 {
-	int erro;
+	if (LIST_EMPTY(&frames_livres))
+		return 0;
+	else {
+		struct frame *f;
 
-	if (bytes > TAM_FRAME)
-		return FALTA_ESPACO;
+		f = LIST_FIRST(&frames_livres);
+		LIST_REMOVE(f, frames);
 
-	erro = pop_frame(endereco);
-	*endereco <<= 12;
+		return f;
+	}
+}
 
-	return erro;
+/*
+ * libera_fis - libera memória física alocada por aloca_fis.
+ * @end - endereço da memória física a ser desalocada.
+ */
+void libera_fis(struct frame *f)
+{
+	if (f < frames || f >= (frames+ultimo_frame))
+		klog(ERRO, "libera_fis: Frame invalido: %p [%p, %p]\n", f,
+		     frames, frames + ultimo_frame);
+	if (f->endereco & 0x00000fff)
+		klog(ERRO, "Tentando liberar endereco invalido: %x\n",
+		     f->endereco);
+	else
+		LIST_INSERT_HEAD(&frames_livres, f, frames);
 }
 
 /*
@@ -85,26 +73,15 @@ int aloca_fis(u32 bytes, u32 *endereco)
  *              menor que 4MB ou FALTA_ESPACO quando não existir tal endereço
  *              livre. Esta função depende da função cria_lista_livres
  *              começar a empilhar os endereços em ordem decrescente.
- * @bytes    - quantidade de memória a ser alocada.
  * @endereco - endereco do espaco alocado.
  */
-int aloca_boot(u32 bytes, u32 *endereco)
+struct frame* aloca_boot(void)
 {
-	if (existe_frame() && (frames_livres[proximo_frame-1] > (0x1400000>>12)))
-		return FALTA_ESPACO;
-	return aloca_fis(bytes, endereco);
-}
-
-/*
- * libera_fis - libera memória física alocada por aloca_fis.
- * @end - endereço da memória física a ser desalocada.
- */
-void libera_fis(u32 end)
-{
-	if (end & 0x00000fff)
-		klog(ERRO, "Tentando liberar endereco invalido: %x\n", end);
+	if (!LIST_EMPTY(&frames_livres)
+	    && LIST_FIRST(&frames_livres)->endereco > 0x1400000)
+		return 0;
 	else
-		adiciona_frame(end>>12);
+		return aloca_fis();
 }
 
 /*
@@ -154,21 +131,20 @@ static __inline__ void* __aloca(u32 bytes)
 }
 
 /* 
- * Aloca depois do final do kernel uma array com os endereços de todas os frames
- * disponíveis. Quando requisitado o sistema irá retornar o primeiro frame
- * vázio.
+ * Aloca uma array com os endereços de todas os frames disponíveis. Esses serão
+ * todos frames que poderão ser utilizados para alocação de memória dinâmica.
  */
-static void cria_lista_livres(struct multiboot_info *mbi)
+static void cria_frame_pool(struct multiboot_info *mbi)
 {
 	struct mmap_record *minfo = mbi->mmap;
-	int tam_mmap = mbi->mmap_length / (sizeof (struct mmap_record));
+	int tam_mmap = mbi->mmap_length / (sizeof *minfo);
 	int i;
 	u32 total_frames;
 
 	total_frames = conta_frames(mbi);
-	frames_livres = __aloca(total_frames * sizeof (u32));
+	frames = __aloca(total_frames * (sizeof *frames));
 
-	proximo_frame = 0;
+	ultimo_frame = 0;
 	for (i = tam_mmap-1; i >= 0; --i)
 		if (minfo[i].type == 1) {
 			u32 base = minfo[i].base_low, tam = minfo[i].length_low;
@@ -184,8 +160,16 @@ static void cria_lista_livres(struct multiboot_info *mbi)
 			frame = ultimo;
 			while ((frame >= primeiro)
 			       && (frame >= (fim_kernel>>12)))
-				frames_livres[proximo_frame++] = frame--;
+				frames[ultimo_frame++].endereco = frame-- << 12;
 		}
+}
+
+static void cria_lista_vazios(void)
+{
+	u32 i;
+
+	for (i = 0; i < ultimo_frame; ++i)
+		LIST_INSERT_HEAD(&frames_livres, &frames[i], frames);
 }
 
 /*
@@ -198,7 +182,9 @@ int inicializa_alocacao_fisica(struct multiboot_info *mbi, u32 final)
 {
 	fim_kernel = final;
 
-	cria_lista_livres(mbi);
+	cria_frame_pool(mbi);
+
+	cria_lista_vazios();
 
 	return 0;
 }

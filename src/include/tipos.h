@@ -2,6 +2,7 @@
 #define __TIPOS_H
 /* public domain */
 
+typedef unsigned short u16;
 typedef unsigned int u32;
 typedef unsigned long long int u64;
 

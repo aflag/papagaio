@@ -2,7 +2,7 @@
 #define __PAGINACAO_IA32_H
 /* public domain */
 
-void* inicializa_paginacao_ia32(int (*aloc)(u32 bytes, u32 *end),
+void* inicializa_paginacao_ia32(struct frame* (*aloc)(void),
                                 struct multiboot_info *mbi);
 int virtual_fisico_boot_ia32(void *end_virtual, u32 *end_real);
 
